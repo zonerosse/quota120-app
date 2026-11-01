@@ -1,0 +1,218 @@
+name: iPhone e iPad
+
+# 1) simulatore (sempre): costruisce l'app per il simulatore e per l'iPhone vero SENZA firma (prova che si costruisce),
+#    poi la apre nel simulatore di iPhone e di iPad e fotografa lo schermo (artefatto «quota120-ios-schermate»).
+# 2) testflight (solo a mano, con «testflight: true», e solo se ci sono i 4 segreti di Apple): firma e manda a TestFlight.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      testflight:
+        description: "Manda a TestFlight (servono i segreti APPLE_TEAM_ID, ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  simulatore:
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Xcode più recente
+        run: |
+          X=$(ls -d /Applications/Xcode_*.app | grep -v beta | sort -V | tail -1)
+          sudo xcode-select -s "$X/Contents/Developer"
+          xcodebuild -version
+
+      - name: Pacchetti e progetto iOS
+        run: |
+          npm ci --no-audit --no-fund
+          npx cap sync ios
+          xcodebuild -list -project ios/App/App.xcodeproj
+
+      - name: Costruisci per il simulatore
+        run: |
+          set -o pipefail
+          mkdir -p esito
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build > /tmp/sim.txt 2>&1 \
+            || { grep -E "error:|\*\* BUILD" /tmp/sim.txt | head -60; tail -40 /tmp/sim.txt; exit 1; }
+          grep -E "\*\* BUILD" /tmp/sim.txt | tee esito/simulatore.txt
+
+      - name: Costruisci per l'iPhone vero (senza firma)
+        run: |
+          set -o pipefail
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' \
+            -derivedDataPath build-dev CODE_SIGNING_ALLOWED=NO build > /tmp/dev.txt 2>&1 \
+            || { grep -E "error:|\*\* BUILD" /tmp/dev.txt | head -60; tail -40 /tmp/dev.txt; exit 1; }
+          grep -E "\*\* BUILD" /tmp/dev.txt | tee esito/iphone-vero.txt
+
+      - name: Cosa c'è nell'app
+        run: |
+          A=build/Build/Products/Debug-iphonesimulator/App.app
+          {
+            echo "app: $A ($(du -sh "$A" | cut -f1))"
+            /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" -c "Print :CFBundleDisplayName" -c "Print :UIDeviceFamily" "$A/Info.plist"
+            python3 -c "import json; c=json.load(open('$A/capacitor.config.json')); print('server:', c['server']['url']); print('plugin:', ', '.join(c['packageClassList']))"
+          } | tee esito/contenuto.txt
+          grep -q "CartellaVoliPlugin" esito/contenuto.txt
+          # il codice del plugin è davvero dentro il programma
+          grep -rqa "CartellaVoliPlugin" --include="App" --include="*.dylib" "$A" \
+            || { echo "plugin CartellaVoli non trovato nel programma"; exit 1; }
+          echo "plugin CartellaVoli: nel programma" | tee -a esito/contenuto.txt
+          (cd build/Build/Products/Debug-iphonesimulator && ditto -c -k --keepParent App.app "$GITHUB_WORKSPACE/esito/Quota120-simulatore.app.zip")
+
+      - name: Apri l'app nel simulatore (iPhone e iPad) e fotografa lo schermo
+        run: |
+          A=build/Build/Products/Debug-iphonesimulator/App.app
+          scegli() { xcrun simctl list devices available -j | python3 -c "
+          import json, sys
+          d = json.load(sys.stdin)['devices']
+          L = [x for k, v in d.items() if 'iOS' in k for x in v if x['name'].startswith('$1')]
+          print(L[-1]['udid'] if L else '')"; }
+          for T in iPhone iPad; do
+            U=$(scegli "$T"); echo "$T: $U"; test -n "$U" || { echo "nessun simulatore $T"; continue; }
+            xcrun simctl boot "$U" || true
+            xcrun simctl bootstatus "$U" -b > /dev/null
+            xcrun simctl install "$U" "$A"
+            xcrun simctl launch "$U" it.puntowebferrara.quota120
+            sleep 35
+            xcrun simctl io "$U" screenshot "esito/schermata-$T.png"
+            xcrun simctl spawn "$U" log show --last 2m --style compact \
+              --predicate 'process == "App" AND (eventMessage CONTAINS[c] "error" OR eventMessage CONTAINS[c] "quota120" OR eventMessage CONTAINS[c] "WebView")' \
+              > "esito/registro-$T.txt" 2>&1 || true
+            xcrun simctl shutdown "$U" || true
+          done
+          ls -la esito
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: quota120-ios-schermate
+          path: |
+            esito/*.png
+            esito/*.txt
+          if-no-files-found: warn
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: quota120-ios-simulatore-app
+          path: esito/Quota120-simulatore.app.zip
+          if-no-files-found: error
+
+  testflight:
+    needs: simulatore
+    if: github.event_name == 'workflow_dispatch' && inputs.testflight
+    runs-on: macos-15
+    timeout-minutes: 60
+    env:
+      TEAM: ${{ secrets.APPLE_TEAM_ID }}
+      KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ISSUER: ${{ secrets.ASC_ISSUER_ID }}
+      P8: ${{ secrets.ASC_KEY_P8 }}
+      BUNDLE: it.puntowebferrara.quota120
+      NOME: Quota 120
+    steps:
+      - name: Ci sono le chiavi di Apple?
+        id: chiavi
+        run: |
+          if [ -n "$TEAM" ] && [ -n "$KEY_ID" ] && [ -n "$ISSUER" ] && [ -n "$P8" ]; then
+            echo "ok=1" >> "$GITHUB_OUTPUT"
+          else
+            echo "Mancano uno o più segreti (APPLE_TEAM_ID, ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8): niente TestFlight. Vedi il LEGGIMI."
+            echo "ok=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v5
+        if: steps.chiavi.outputs.ok
+
+      - uses: actions/setup-node@v5
+        if: steps.chiavi.outputs.ok
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Xcode più recente e progetto
+        if: steps.chiavi.outputs.ok
+        run: |
+          X=$(ls -d /Applications/Xcode_*.app | grep -v beta | sort -V | tail -1)
+          sudo xcode-select -s "$X/Contents/Developer"
+          xcodebuild -version
+          npm ci --no-audit --no-fund
+          npx cap sync ios
+
+      # il Bundle ID in Apple: se non c'è ancora, lo registra la chiave API (l'app va comunque creata a mano in App Store Connect)
+      - name: Bundle ID in Apple
+        if: steps.chiavi.outputs.ok
+        run: |
+          python3 -m pip install -q --break-system-packages pyjwt cryptography 2>/dev/null || python3 -m pip install -q pyjwt cryptography
+          python3 - <<'PY'
+          import json, os, time, urllib.request, urllib.error
+          import jwt
+          bid = os.environ["BUNDLE"]
+          tok = jwt.encode({"iss": os.environ["ISSUER"], "iat": int(time.time()), "exp": int(time.time()) + 900, "aud": "appstoreconnect-v1"},
+                           os.environ["P8"], algorithm="ES256", headers={"kid": os.environ["KEY_ID"], "typ": "JWT"})
+          def api(m, u, d=None):
+              r = urllib.request.Request("https://api.appstoreconnect.apple.com/v1/" + u, method=m, data=json.dumps(d).encode() if d else None,
+                                         headers={"Authorization": "Bearer " + tok, "Content-Type": "application/json"})
+              with urllib.request.urlopen(r, timeout=30) as x:
+                  return json.loads(x.read() or b"{}")
+          if api("GET", "bundleIds?filter[identifier]=" + bid).get("data"):
+              print("Bundle ID già registrato:", bid)
+          else:
+              try:
+                  api("POST", "bundleIds", {"data": {"type": "bundleIds", "attributes": {"identifier": bid, "name": os.environ["NOME"], "platform": "IOS"}}})
+                  print("Bundle ID registrato:", bid)
+              except urllib.error.HTTPError as e:
+                  print("Bundle ID non registrato: errore", e.code)
+          app = api("GET", "apps?filter[bundleId]=" + bid).get("data")
+          print("App in App Store Connect:", "c'è" if app else "MANCA: crearla in App Store Connect con questo Bundle ID")
+          PY
+
+      - name: Firma e manda a TestFlight
+        if: steps.chiavi.outputs.ok
+        run: |
+          mkdir -p ~/.appstoreconnect/private_keys esito
+          K=~/.appstoreconnect/private_keys/AuthKey_$KEY_ID.p8
+          printf '%s' "$P8" > "$K"
+          V=$(python3 -c "import json;print(json.load(open('package.json'))['version'])")
+          set -o pipefail
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release -sdk iphoneos \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/q120.xcarchive" \
+            DEVELOPMENT_TEAM="$TEAM" MARKETING_VERSION="$V" CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
+            CODE_SIGNING_ALLOWED=NO archive > "$RUNNER_TEMP/archivio.txt" 2>&1 \
+            || { grep -E "error:|\*\* ARCHIVE" "$RUNNER_TEMP/archivio.txt" | tail -60; rm -f "$K"; exit 65; }
+          echo "archivio fatto: versione $V ($GITHUB_RUN_NUMBER)"
+          cat > "$RUNNER_TEMP/esporta.plist" <<PL
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>$TEAM</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+          </dict></plist>
+          PL
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/q120.xcarchive" -exportOptionsPlist "$RUNNER_TEMP/esporta.plist" \
+            -exportPath "$RUNNER_TEMP/q120-export" -allowProvisioningUpdates \
+            -authenticationKeyPath "$K" -authenticationKeyID "$KEY_ID" -authenticationKeyIssuerID "$ISSUER" > "$RUNNER_TEMP/invio.txt" 2>&1 \
+            || { grep -E "error|Error" "$RUNNER_TEMP/invio.txt" | tail -60; rm -f "$K"; exit 66; }
+          rm -f "$K"
+          echo "Mandata a TestFlight: tra qualche minuto compare nell'app TestFlight."

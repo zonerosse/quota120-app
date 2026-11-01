@@ -1,0 +1,40 @@
+{
+  "appId": "it.puntowebferrara.quota120",
+  "appName": "Quota 120",
+  "webDir": "www",
+  "backgroundColor": "#132A3A",
+  "loggingBehavior": "none",
+  "server": {
+    "url": "https://app.quota120.com",
+    "errorPath": "errore.html",
+    "allowNavigation": [
+      "app.quota120.com",
+      "prova.quota120.com",
+      "quota120.com",
+      "www.quota120.com"
+    ]
+  },
+  "ios": {
+    "contentInset": "never",
+    "backgroundColor": "#132A3A",
+    "limitsNavigationsToAppBoundDomains": false,
+    "appendUserAgent": "Quota120App"
+  },
+  "android": {
+    "backgroundColor": "#132A3A",
+    "allowMixedContent": false,
+    "appendUserAgent": "Quota120App"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 600,
+      "launchAutoHide": true,
+      "backgroundColor": "#132A3A",
+      "showSpinner": false
+    },
+    "SystemBars": {
+      "style": "DARK",
+      "insetsHandling": "css"
+    }
+  }
+}

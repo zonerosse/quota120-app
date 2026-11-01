@@ -1,0 +1,20 @@
+node_modules/
+.DS_Store
+*.log
+# chiavi e segreti: MAI nel repository (è pubblico)
+*.jks
+*.keystore
+*.p12
+*.p8
+*.mobileprovision
+*.cer
+google-services.json
+GoogleService-Info.plist
+.env*
+# prodotti delle costruzioni
+android/app/build/
+android/build/
+android/.gradle/
+ios/App/build/
+ios/DerivedData/
+esito/

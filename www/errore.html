@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="it"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="only light">
+<title>Quota 120</title>
+<style>
+:root{--notte:#132A3A;--accent:#1D5C7C;--bordo:#D3DBE0;--ink:#0F1C26;--ink3:#5E6D77}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%;background:var(--notte);color:#fff;font-family:-apple-system,"Segoe UI",Roboto,Arial,sans-serif;font-size:16px;line-height:1.45}
+main{max-width:420px;margin:0 auto;padding:calc(env(safe-area-inset-top) + 64px) 16px 32px;text-align:center}
+img{width:84px;height:84px;border-radius:20px;display:block;margin:0 auto 18px}
+h1{font-size:22px;margin:0 0 8px}
+p{margin:0 0 22px;color:#C9D4DB}
+button{font:inherit;font-weight:700;font-size:16px;width:100%;padding:13px 14px;border-radius:10px;border:0;background:#fff;color:var(--notte);display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer}
+.spin{width:16px;height:16px;border:2px solid rgba(19,42,58,.3);border-top-color:var(--notte);border-radius:50%;animation:g .8s linear infinite;display:none}
+.busy .spin{display:inline-block}
+@keyframes g{to{transform:rotate(360deg)}}
+</style></head><body>
+<main>
+  <img src="icona.png" alt="">
+  <h1>Quota 120 non si apre</h1>
+  <p>Serve internet. Controlla la rete o i dati del telefono, poi tocca «Riprova».</p>
+  <button type="button" id="r"><span class="spin"></span>Riprova</button>
+</main>
+<script>
+document.getElementById('r').onclick=function(){ this.classList.add('busy'); this.disabled=true; location.href='https://app.quota120.com/'; };
+</script>
+</body></html>

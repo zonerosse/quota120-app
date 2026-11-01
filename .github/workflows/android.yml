@@ -1,0 +1,91 @@
+name: Android
+
+# Costruisce l'app Quota 120 per Android (APK da installare a mano per le prove).
+# - app-debug.apk: versione di prova
+# - app-release.apk: versione «finale», firmata con la chiave di prova (si installa, ma non va su Google Play)
+# - con i segreti della chiave di Google Play (vedi LEGGIMI): anche il pacchetto .aab firmato per Google Play
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      KS_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Nessuna chiave nel repository
+        run: |
+          if git grep -nIE "BEGIN (EC |RSA |ENCRYPTED )?PRIVATE KEY|sk-ant-[A-Za-z0-9]" -- . ':!.github/workflows/*'; then
+            echo "Trovato qualcosa che sembra una chiave: il repository è pubblico, toglierla"; exit 1; fi
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Pacchetti e progetto Android
+        run: |
+          npm ci --no-audit --no-fund
+          npx cap sync android
+
+      - name: Costruisci gli APK
+        working-directory: android
+        run: ./gradlew --no-daemon --stacktrace assembleDebug assembleRelease
+
+      - name: Cosa c'è negli APK
+        run: |
+          mkdir -p esito
+          AAPT=$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -1)aapt
+          for A in $(find android/app/build/outputs/apk -name "*.apk"); do
+            echo "== $A ($(du -h "$A" | cut -f1))"
+            "$AAPT" dump badging "$A" | grep -E "^package:|^sdkVersion|^targetSdkVersion|^application-label:|uses-permission" || true
+            unzip -p "$A" assets/capacitor.config.json | python3 -c "import json,sys; c=json.load(sys.stdin); print('server:', c['server']['url'], '| navigazione:', ', '.join(c['server']['allowNavigation']))"
+            unzip -p "$A" assets/capacitor.plugins.json | grep -q "CartellaVoliPlugin" && echo "plugin CartellaVoli: presente"
+          done | tee esito/apk.txt
+          grep -q "plugin CartellaVoli: presente" esito/apk.txt
+
+      # Google Play: solo se il titolare ha messo la chiave nei segreti di QUESTO repository
+      - name: Pacchetto per Google Play (.aab firmato)
+        if: env.KS_B64 != ''
+        working-directory: android
+        env:
+          Q120_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          Q120_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          Q120_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          export Q120_KEYSTORE_FILE="$RUNNER_TEMP/quota120.jks"
+          printf '%s' "$KS_B64" | base64 -d > "$Q120_KEYSTORE_FILE"
+          ./gradlew --no-daemon bundleRelease
+          rm -f "$Q120_KEYSTORE_FILE"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: quota120-android-apk
+          path: |
+            android/app/build/outputs/apk/debug/*.apk
+            android/app/build/outputs/apk/release/*.apk
+            esito/apk.txt
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: env.KS_B64 != ''
+        with:
+          name: quota120-android-aab
+          path: android/app/build/outputs/bundle/release/*.aab

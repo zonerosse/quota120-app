@@ -1,0 +1,24 @@
+{
+  "name": "quota120-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "App Quota 120 per iPhone, iPad e Android (guscio Capacitor che apre app.quota120.com)",
+  "license": "UNLICENSED",
+  "scripts": {
+    "sync": "cap sync",
+    "icone": "node strumenti/icone.mjs && capacitor-assets generate --ios --android --iconBackgroundColor '#132A3A' --iconBackgroundColorDark '#132A3A' --splashBackgroundColor '#132A3A' --splashBackgroundColorDark '#132A3A'"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.6.0",
+    "@capacitor/ios": "^8.6.0",
+    "@capacitor/push-notifications": "^8.1.3",
+    "@capacitor/splash-screen": "^8.0.2",
+    "cartella-voli": "file:plugins/cartella-voli"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^4.0.0",
+    "@capacitor/cli": "^8.6.0"
+  }
+}

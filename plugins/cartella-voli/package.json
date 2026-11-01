@@ -1,0 +1,14 @@
+{
+  "name": "cartella-voli",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Quota 120: legge i voli di DJI Fly da una cartella scelta una volta (iPhone e iPad). Su Android risponde che non c'è.",
+  "license": "UNLICENSED",
+  "main": "index.js",
+  "files": ["index.js", "Package.swift", "ios/Sources", "android/src/main", "android/build.gradle"],
+  "capacitor": {
+    "ios": { "src": "ios" },
+    "android": { "src": "android" }
+  },
+  "peerDependencies": { "@capacitor/core": ">=8.0.0" }
+}

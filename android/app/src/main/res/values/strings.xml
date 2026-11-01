@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Quota 120</string>
+    <string name="title_activity_main">Quota 120</string>
+    <string name="package_name">it.puntowebferrara.quota120</string>
+    <string name="custom_url_scheme">it.puntowebferrara.quota120</string>
+</resources>
