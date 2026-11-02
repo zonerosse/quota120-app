@@ -100,6 +100,11 @@ jobs:
             xcrun simctl shutdown "$U" || true
           done
           ls -la esito
+          # copia piccola delle schermate anche nel registro (base64, JPEG 420 px): si vede anche senza scaricare gli artefatti
+          for F in esito/schermata-*.png; do
+            sips -s format jpeg -s formatOptions 60 -Z 420 "$F" --out /tmp/piccola.jpg > /dev/null
+            echo "SCHERMATA $(basename "$F") $(base64 -i /tmp/piccola.jpg | tr -d '\n')"
+          done
 
       - uses: actions/upload-artifact@v4
         if: always()
