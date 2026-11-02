@@ -57,9 +57,14 @@ jobs:
             echo "== $A ($(du -h "$A" | cut -f1))"
             "$AAPT" dump badging "$A" | grep -E "^package:|^sdkVersion|^targetSdkVersion|^application-label:|uses-permission" || true
             unzip -p "$A" assets/capacitor.config.json | python3 -c "import json,sys; c=json.load(sys.stdin); print('server:', c['server']['url'], '| navigazione:', ', '.join(c['server']['allowNavigation']))"
-            unzip -p "$A" assets/capacitor.plugins.json | grep -q "CartellaVoliPlugin" && echo "plugin CartellaVoli: presente"
+            for P in CartellaVoliPlugin StampaSalvaPlugin LeggiQRPlugin; do
+              unzip -p "$A" assets/capacitor.plugins.json | grep -q "$P" && echo "plugin $P: presente"
+            done
           done | tee esito/apk.txt
-          grep -q "plugin CartellaVoli: presente" esito/apk.txt
+          for P in CartellaVoliPlugin StampaSalvaPlugin LeggiQRPlugin; do
+            test "$(grep -c "plugin $P: presente" esito/apk.txt)" -ge 2 || { echo "$P manca in un APK"; exit 1; }
+          done
+          grep -q "android.permission.CAMERA" esito/apk.txt
 
       # Google Play: solo se il titolare ha messo la chiave nei segreti di QUESTO repository
       - name: Pacchetto per Google Play (.aab firmato)

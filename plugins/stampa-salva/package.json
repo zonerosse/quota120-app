@@ -1,0 +1,14 @@
+{
+  "name": "stampa-salva",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Quota 120: «Stampa o salva» dentro l'app (scelta del telefono per stampare, salvare, mandare), PDF A4 da una stampa HTML, pagine di un PDF come immagini.",
+  "license": "UNLICENSED",
+  "main": "index.js",
+  "files": ["index.js", "Package.swift", "ios/Sources", "android/src/main", "android/build.gradle"],
+  "capacitor": {
+    "ios": { "src": "ios" },
+    "android": { "src": "android" }
+  },
+  "peerDependencies": { "@capacitor/core": ">=8.0.0" }
+}

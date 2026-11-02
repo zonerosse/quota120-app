@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!-- «Stampa» nella scelta di «Stampa o salva»: stampa il PDF appena preparato dall'app (solo i file della cartella «condivisi») -->
+        <activity
+            android:name="it.puntowebferrara.quota120.stampasalva.StampaActivity"
+            android:exported="true"
+            android:label="Stampa"
+            android:excludeFromRecents="true"
+            android:noHistory="false"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+    </application>
+</manifest>

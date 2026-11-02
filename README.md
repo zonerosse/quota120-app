@@ -18,6 +18,8 @@
 | `ios/` | progetto Xcode (iPhone e iPad) |
 | `android/` | progetto Android (Android 7.0 e successivi, `minSdk` 24) |
 | `plugins/cartella-voli/` | il pezzo nativo «Collega i voli di DJI Fly» (Swift per iPhone/iPad; su Android risponde «non disponibile») |
+| `plugins/stampa-salva/` | visore di documenti e stampe: «Stampa o salva» (iPhone, iPad e Android) |
+| `plugins/leggi-qr/` | «Leggi QR»: fotocamera che legge le etichette QR di droni e batterie (iPhone, iPad e Android) |
 | `www/` | solo la pagina «senza internet» e l'icona |
 | `assets/`, `strumenti/icone.mjs` | icona e schermata d'avvio (`npm run icone` le rigenera dall'icona di Quota 120) |
 | `.github/workflows/` | le costruzioni automatiche |
@@ -42,6 +44,32 @@ Al massimo 10 file e 20 MB per volta (la pagina richiama finché ce ne sono); fi
 
 **Android:** DJI Fly tiene i voli in `Android/data`, che Android non lascia leggere alle altre app. Lì il plugin risponde
 `{disponibile:false}` e tutto resta come oggi (scelta dei file o «Condividi › Quota 120»).
+
+## Documenti, stampe ed etichette: «Stampa o salva» (`plugins/stampa-salva/`)
+
+Sul sito documenti, stampe ed etichette QR si aprono in una finestra nuova; nell'app la finestra nuova non c'è.
+Nell'app la pagina li mostra in un **visore** a tutto schermo con «← Indietro» e **«Stampa o salva»**, che apre la scelta
+del telefono: su iPhone/iPad Stampa, Salva su File, Mail, WhatsApp…; su Android WhatsApp, Gmail, Drive… più la voce «Stampa».
+
+Metodi (`window.Capacitor.Plugins.StampaSalva`): `condividiFile({nome, mime, base64})`, `htmlInPdf({html, nome})` → `{base64}`
+(PDF A4 a pagine vere: iOS con la stampa di WebKit, Android con la stampa della WebView; se non riesce la pagina fa il PDF da sola),
+`pdfPagine({base64, larghezza, max})` → `{pagine:[{base64,w,h}], totale}` (le pagine di un PDF come immagini, per il visore:
+la WebView di Android non mostra i PDF). Il tasto «indietro» di Android chiude il visore.
+
+## «Leggi QR» (`plugins/leggi-qr/`)
+
+In Home (sotto il saluto) e in cima alla pagina Droni c'è il tasto **«Leggi QR»** (solo nell'app): si apre la fotocamera a tutto
+schermo con «← Indietro» e «Inquadra il QR dell'etichetta: si apre da solo.». Se il QR è un'etichetta di Quota 120 di questo spazio
+si apre la sua scheda («Lo prendo io», «Segnala un problema», «Apri la scheda»); se no compare «Questo QR non è un'etichetta dei tuoi
+droni» e la fotocamera resta aperta.
+
+- iPhone/iPad: lettore di QR di iOS (AVFoundation). Android: CameraX + ZXing, tutto dentro l'app (niente servizi Google Play).
+- Perché non un plugin già pronto: `@capacitor-mlkit/barcode-scanning` si installa solo con CocoaPods (questo progetto usa Swift
+  Package Manager) e su Android porta i servizi Google Play; `@capacitor/barcode-scanner` ha la sua schermata (non si può avere
+  «← Indietro», la riga di aiuto e l'avviso con la fotocamera che resta aperta) e chiede Android 8 come minimo.
+- Metodi (`window.Capacitor.Plugins.LeggiQR`): `apri({titolo, indietro, suggerimento})`, `avviso({testo})`, `chiudi()`;
+  eventi `letto` `{testo}` e `chiuso`. La pagina decide cosa è un'etichetta valida.
+- Permesso della fotocamera: la frase italiana è già in `Info.plist` e il permesso in `AndroidManifest.xml`.
 
 ## Le costruzioni (GitHub Actions)
 

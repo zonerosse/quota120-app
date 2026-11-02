@@ -15,7 +15,9 @@ let package = Package(
         .package(name: "CapacitorApp", path: "../../../node_modules/@capacitor/app"),
         .package(name: "CapacitorPushNotifications", path: "../../../node_modules/@capacitor/push-notifications"),
         .package(name: "CapacitorSplashScreen", path: "../../../node_modules/@capacitor/splash-screen"),
-        .package(name: "CartellaVoli", path: "../../../plugins/cartella-voli")
+        .package(name: "CartellaVoli", path: "../../../plugins/cartella-voli"),
+        .package(name: "LeggiQr", path: "../../../plugins/leggi-qr"),
+        .package(name: "StampaSalva", path: "../../../plugins/stampa-salva")
     ],
     targets: [
         .target(
@@ -26,7 +28,9 @@ let package = Package(
                 .product(name: "CapacitorApp", package: "CapacitorApp"),
                 .product(name: "CapacitorPushNotifications", package: "CapacitorPushNotifications"),
                 .product(name: "CapacitorSplashScreen", package: "CapacitorSplashScreen"),
-                .product(name: "CartellaVoli", package: "CartellaVoli")
+                .product(name: "CartellaVoli", package: "CartellaVoli"),
+                .product(name: "LeggiQr", package: "LeggiQr"),
+                .product(name: "StampaSalva", package: "StampaSalva")
             ]
         )
     ]

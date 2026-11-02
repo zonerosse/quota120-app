@@ -13,3 +13,9 @@ project(':capacitor-splash-screen').projectDir = new File('../node_modules/@capa
 
 include ':cartella-voli'
 project(':cartella-voli').projectDir = new File('../plugins/cartella-voli/android')
+
+include ':leggi-qr'
+project(':leggi-qr').projectDir = new File('../plugins/leggi-qr/android')
+
+include ':stampa-salva'
+project(':stampa-salva').projectDir = new File('../plugins/stampa-salva/android')

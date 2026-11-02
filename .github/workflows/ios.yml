@@ -71,11 +71,14 @@ jobs:
             /usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" -c "Print :CFBundleDisplayName" -c "Print :UIDeviceFamily" "$A/Info.plist"
             python3 -c "import json; c=json.load(open('$A/capacitor.config.json')); print('server:', c['server']['url']); print('plugin:', ', '.join(c['packageClassList']))"
           } | tee esito/contenuto.txt
-          grep -q "CartellaVoliPlugin" esito/contenuto.txt
-          # il codice del plugin è davvero dentro il programma
-          grep -rqa "CartellaVoliPlugin" --include="App" --include="*.dylib" "$A" \
-            || { echo "plugin CartellaVoli non trovato nel programma"; exit 1; }
-          echo "plugin CartellaVoli: nel programma" | tee -a esito/contenuto.txt
+          # i pezzi nativi di Quota 120 (cartella dei voli, «Stampa o salva», «Leggi QR») sono davvero dentro il programma
+          for P in CartellaVoliPlugin StampaSalvaPlugin LeggiQRPlugin; do
+            grep -q "$P" esito/contenuto.txt || { echo "$P non registrato"; exit 1; }
+            grep -rqa "$P" --include="App" --include="*.dylib" "$A" || { echo "$P non trovato nel programma"; exit 1; }
+            echo "plugin $P: nel programma" | tee -a esito/contenuto.txt
+          done
+          # «Leggi QR» chiede la fotocamera: la frase del permesso deve esserci, in italiano
+          /usr/libexec/PlistBuddy -c "Print :NSCameraUsageDescription" "$A/Info.plist" | tee -a esito/contenuto.txt | grep -q "etichette QR"
           (cd build/Build/Products/Debug-iphonesimulator && ditto -c -k --keepParent App.app "$GITHUB_WORKSPACE/esito/Quota120-simulatore.app.zip")
 
       - name: Apri l'app nel simulatore (iPhone e iPad) e fotografa lo schermo
