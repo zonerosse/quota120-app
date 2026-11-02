@@ -67,8 +67,11 @@ droni» e la fotocamera resta aperta.
 - Perché non un plugin già pronto: `@capacitor-mlkit/barcode-scanning` si installa solo con CocoaPods (questo progetto usa Swift
   Package Manager) e su Android porta i servizi Google Play; `@capacitor/barcode-scanner` ha la sua schermata (non si può avere
   «← Indietro», la riga di aiuto e l'avviso con la fotocamera che resta aperta) e chiede Android 8 come minimo.
-- Metodi (`window.Capacitor.Plugins.LeggiQR`): `apri({titolo, indietro, suggerimento})`, `avviso({testo})`, `chiudi()`;
+- Metodi (`window.Capacitor.Plugins.LeggiQR`): `apri({titolo, indietro, suggerimento, formati})`, `avviso({testo})`, `chiudi()`;
   eventi `letto` `{testo}` e `chiuso`. La pagina decide cosa è un'etichetta valida.
+- `formati`: `"qr"` (di serie, solo QR, come «Leggi QR») oppure `"tutti"` (anche DataMatrix e codici a barre Code 128, Code 39, EAN,
+  UPC): lo usa «Leggi l'etichetta del drone» nel modulo «Nuovo drone» per leggere la matricola (anteprima 129). Su Android i codici a
+  barre si cercano anche nell'immagine girata di 90°, perché col telefono dritto le barre arrivano in verticale.
 - Permesso della fotocamera: la frase italiana è già in `Info.plist` e il permesso in `AndroidManifest.xml`.
 
 ## Le costruzioni (GitHub Actions)

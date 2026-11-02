@@ -48,6 +48,7 @@ import com.google.zxing.PlanarYUVLuminanceSource;
 import com.google.zxing.Result;
 import com.google.zxing.common.HybridBinarizer;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.Map;
@@ -62,7 +63,8 @@ import java.util.concurrent.Executors;
  * se è un'etichetta dei suoi droni (chiude e apre la scheda) oppure manda un avviso e la fotocamera resta aperta.
  *
  *   disponibile()                                -> { disponibile }
- *   apri({ titolo?, indietro?, suggerimento? })  -> { aperto: true }    (permesso negato: errore «PERMESSO»)
+ *   apri({ titolo?, indietro?, suggerimento?, formati? })  -> { aperto: true }    (permesso negato: errore «PERMESSO»)
+ *     formati: «qr» (di serie, solo QR) oppure «tutti» (anche DataMatrix e codici a barre: Code 128, Code 39, EAN, UPC)
  *   avviso({ testo })                            -> {}
  *   chiudi()                                     -> {}
  * Eventi: «letto» { testo }, «chiuso» {} (tasto «Indietro» o «indietro» del telefono)
@@ -80,6 +82,7 @@ public class LeggiQRPlugin extends Plugin {
     private boolean chiusoDallaPagina = false;
     private String ultimo = "";
     private long ultimoT = 0, pausaFino = 0;
+    private boolean tutti = false;   // «formati: tutti» = anche DataMatrix e codici a barre (etichetta del drone)
 
     @PluginMethod
     public void disponibile(PluginCall call) {
@@ -150,6 +153,8 @@ public class LeggiQRPlugin extends Plugin {
             final String titolo = call.getString("titolo", "Leggi QR");
             final String indietro = call.getString("indietro", "← Indietro");
             final String suggerimento = call.getString("suggerimento", "Inquadra il QR dell’etichetta: si apre da solo.");
+            tutti = "tutti".equals(call.getString("formati", "qr"));
+            ultimo = "";
 
             FrameLayout radice = new FrameLayout(getActivity());
             radice.setBackgroundColor(Color.rgb(0x20, 0x26, 0x2b));
@@ -265,7 +270,14 @@ public class LeggiQRPlugin extends Plugin {
                 analisi = Executors.newSingleThreadExecutor();
                 final MultiFormatReader lettore = new MultiFormatReader();
                 Map<DecodeHintType, Object> h = new EnumMap<>(DecodeHintType.class);
-                h.put(DecodeHintType.POSSIBLE_FORMATS, Collections.singletonList(BarcodeFormat.QR_CODE));
+                if (tutti) {
+                    h.put(DecodeHintType.POSSIBLE_FORMATS, Arrays.asList(BarcodeFormat.QR_CODE, BarcodeFormat.DATA_MATRIX,
+                        BarcodeFormat.CODE_128, BarcodeFormat.CODE_39, BarcodeFormat.EAN_13, BarcodeFormat.EAN_8,
+                        BarcodeFormat.UPC_A, BarcodeFormat.UPC_E));
+                    h.put(DecodeHintType.TRY_HARDER, Boolean.TRUE);
+                } else {
+                    h.put(DecodeHintType.POSSIBLE_FORMATS, Collections.singletonList(BarcodeFormat.QR_CODE));
+                }
                 lettore.setHints(h);
                 a.setAnalyzer(analisi, img -> leggi(lettore, img));
                 camera.unbindAll();
@@ -290,12 +302,19 @@ public class LeggiQRPlugin extends Plugin {
             buf.rewind();
             buf.get(dati, 0, Math.min(buf.remaining(), dati.length));
             PlanarYUVLuminanceSource src = new PlanarYUVLuminanceSource(dati, rs, h, 0, 0, w, h, false);
-            Result r;
+            Result r = null;
             try {
                 r = lettore.decodeWithState(new BinaryBitmap(new HybridBinarizer(src)));
             } catch (Exception nonTrovato) {
-                // anche le etichette chiare su fondo scuro
-                r = lettore.decodeWithState(new BinaryBitmap(new HybridBinarizer(src.invert())));
+                try {
+                    // anche le etichette chiare su fondo scuro
+                    r = lettore.decodeWithState(new BinaryBitmap(new HybridBinarizer(src.invert())));
+                } catch (Exception ancoraNo) {
+                    if (!tutti) throw ancoraNo;
+                    // codici a barre: col telefono dritto le barre arrivano in verticale nell'immagine della fotocamera
+                    byte[] g = ruota(dati, rs, w, h);
+                    r = lettore.decodeWithState(new BinaryBitmap(new HybridBinarizer(new PlanarYUVLuminanceSource(g, h, w, 0, 0, h, w, false))));
+                }
             }
             final String t = r == null ? null : r.getText();
             if (t != null && !t.isEmpty()) main.post(() -> letto(t));
@@ -305,6 +324,16 @@ public class LeggiQRPlugin extends Plugin {
             lettore.reset();
             img.close();
         }
+    }
+
+    /** la luminanza girata di 90° (larghezza w, altezza h, riga lunga rs) -> immagine h x w */
+    private static byte[] ruota(byte[] y, int rs, int w, int h) {
+        byte[] o = new byte[w * h];
+        for (int r = 0; r < h; r++) {
+            int base = r * rs;
+            for (int c = 0; c < w; c++) o[c * h + (h - 1 - r)] = y[base + c];
+        }
+        return o;
     }
 
     private void letto(String t) {

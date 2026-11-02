@@ -11,7 +11,8 @@ import AVFoundation
 ///
 /// Metodi (window.Capacitor.Plugins.LeggiQR):
 ///   disponibile()                                -> { disponibile }
-///   apri({ titolo?, indietro?, suggerimento? })  -> { aperto: true }    (permesso negato: errore «PERMESSO»)
+///   apri({ titolo?, indietro?, suggerimento?, formati? })  -> { aperto: true }    (permesso negato: errore «PERMESSO»)
+///     formati: «qr» (di serie, solo QR) oppure «tutti» (anche DataMatrix e codici a barre: Code 128, Code 39, EAN, UPC)
 ///   avviso({ testo })                            -> {}                  messaggio sopra la fotocamera, per 3 secondi
 ///   chiudi()                                     -> {}
 /// Eventi: «letto» { testo }, «chiuso» {} (quando si tocca «Indietro»)
@@ -65,6 +66,7 @@ public class LeggiQRPlugin: CAPPlugin, CAPBridgedPlugin {
         s.titolo = call.getString("titolo") ?? "Leggi QR"
         s.indietro = call.getString("indietro") ?? "← Indietro"
         s.suggerimento = call.getString("suggerimento") ?? "Inquadra il QR dell’etichetta: si apre da solo."
+        s.tutti = (call.getString("formati") ?? "qr") == "tutti"
         s.modalPresentationStyle = .fullScreen
         s.onLetto = { [weak self] t in self?.notifyListeners("letto", data: ["testo": t]) }
         s.onIndietro = { [weak self] in
@@ -103,6 +105,7 @@ class LeggiQRSchermo: UIViewController, AVCaptureMetadataOutputObjectsDelegate {
     var titolo = "Leggi QR"
     var indietro = "← Indietro"
     var suggerimento = ""
+    var tutti = false   // «formati: tutti» = anche DataMatrix e codici a barre (etichetta del drone)
     var onLetto: ((String) -> Void)?
     var onIndietro: (() -> Void)?
 
@@ -220,7 +223,10 @@ class LeggiQRSchermo: UIViewController, AVCaptureMetadataOutputObjectsDelegate {
         if sessione.canAddOutput(uscita) {
             sessione.addOutput(uscita)
             uscita.setMetadataObjectsDelegate(self, queue: .main)
-            if uscita.availableMetadataObjectTypes.contains(.qr) { uscita.metadataObjectTypes = [.qr] }
+            let voluti: [AVMetadataObject.ObjectType] = tutti
+                ? [.qr, .dataMatrix, .code128, .code39, .code39Mod43, .ean13, .ean8, .upce]
+                : [.qr]
+            uscita.metadataObjectTypes = voluti.filter { uscita.availableMetadataObjectTypes.contains($0) }
         }
         sessione.commitConfiguration()
         if dev.isFocusModeSupported(.continuousAutoFocus), (try? dev.lockForConfiguration()) != nil {
